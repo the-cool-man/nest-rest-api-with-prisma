@@ -3,35 +3,39 @@ import { User, Bookmark } from "@prisma/client";
 import { PrismaService } from "src/prisma/prisma.service";
 import { AuthDto } from "./dto";
 import * as argon from "argon2";
+import { JwtService } from "@nestjs/jwt";
+import { ConfigService } from "@nestjs/config";
 
 @Injectable()
 export class AuthService {
 
-    constructor(private prisma: PrismaService) {}
+    constructor(private prisma: PrismaService,
+        private jwt: JwtService,
+        private config: ConfigService) { }
 
     async login(dto: AuthDto) {
 
-    // find the user by email
-    const user = await this.prisma.user.findUnique({
-        where: {
-            email: dto.email,
+        // find the user by email
+        const user = await this.prisma.user.findUnique({
+            where: {
+                email: dto.email,
+            }
+        })
+
+        // if user does not exist throw exception
+        if (!user) {
+            throw new ForbiddenException("Credentials are incorrect");
         }
-    })
 
-    // if user does not exist throw exception
-    if(!user) {
-        throw new ForbiddenException("Credentials are incorrect");
-    }
+        // compare password
+        const pwMatches = await argon.verify(user.hash, dto.password);
 
-    // compare password
-    const pwmatches =  await argon.verify(user.hash, dto.password);
-    if(!pwmatches) {
-        throw new ForbiddenException("Credentials are incorrect");
-    }
+        if (!pwMatches) {
+            throw new ForbiddenException("Credentials are incorrect");
+        }
 
-    // send back to user
-    delete user.hash;
-    return user;
+        // send back to user
+        return this.signToken(user.id, user.email);
     }
 
 
@@ -48,18 +52,16 @@ export class AuthService {
                 }
             })
 
-            delete user.hash;
-            
             // return to user
             return {
                 status: 'Register success',
-                data: user
+                data: this.signToken(user.id, user.email)
             };
-            
-        } catch (error) {
-          //  console.log(error);
 
-            if(error.code === 'P2002') {
+        } catch (error) {
+            //  console.log(error);
+
+            if (error.code === 'P2002') {
                 throw new ForbiddenException('Email is already taken');
 
             } else {
@@ -69,16 +71,25 @@ export class AuthService {
         }
     }
 
+    async signToken(userId: number, email: string): Promise<{ access_token: string }> {
 
-    // async verifyPassword() {
-    //     try {
-    //         if (await argon.verify("<big long hash>", "password")) {
-    //           // password match
-    //         } else {
-    //           // password did not match
-    //         }
-    //     } catch (err) {
-    //     // internal failure
-    //     }
-    // }
+        const payload = {
+            sub: userId,
+            email
+        };
+
+        const token = await this.jwt.signAsync(payload, {
+            expiresIn: '15m',
+            secret: this.config.get("JWT_SECRET")
+        });
+
+        return {
+            access_token: token,
+        };
+
+    }
+
+
+
+
 }
