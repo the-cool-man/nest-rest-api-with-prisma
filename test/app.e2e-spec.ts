@@ -1,6 +1,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../src/app.module';
+import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('App e2e', () => {
 
@@ -16,12 +17,28 @@ describe('App e2e', () => {
       whitelist: true
     }));
     await app.init();
+
+    const prisma = app.get(PrismaService)
+    await prisma.cleanDb();
   });
 
   afterAll( () => {
     app.close();
   })
 
+  describe('Auth', () => {
+    describe('Signup', () => {
+      it.todo('should signup');
+    });
+    describe('Signin', () => {
+      it.todo('should signin');
+    });
+  })
+
+  describe('User', () => {
+    describe('Get me', () => {});
+    describe('Edit user', () => {});
+  })
   
   it.todo('should pass');
 });
